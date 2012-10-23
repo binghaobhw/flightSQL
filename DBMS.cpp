@@ -321,45 +321,48 @@ void DBMS::Compare(int processed, string tableName,
                    string col, string op, string value)
 {
     list<char*> tuple;
+    list<char*>::iterator it;
+    char** piece;
+    char* yuanzu;
+    int i,j;
+    int count;
     string filePath;
     myfstream fs;
     filePath = GetWholeName(currentDb) + "\\";
     //无需读temp
     if(processed == 0) {
         filePath += tableName + ".tab";
+        this->GetTableInfo(tableName);
+        fs.open(filePath);
+        count = 0;
+        while (!fs.end()) {
+            piece[count] = new char[piece_length];
+            fs.read(piece);
+            int max_tuple_num_in_piece = piece_length / this->tupleLength;
+            for (i = 0; i < max_tuple_num_in_piece; i++) {
+                yuanzu = piece[count] + i * (this->tupleLength + 1);
+                if (yuanzu[0] == '\0')
+                    break;
+                if (yuanzu[0] == 'y') { //yuanzu  option
+                    tuple.push_back(yuanzu);
+                }
+            }
+            count++;
+        }
+        
     }
     //读temp
     else {
         filePath += "temp.tab";
+        this->GetTableInfo("TEMP");
     }
-    fs.open(filePath);
-    while (!readfile.end()) {
-        char* piece = new char[piece_length];
-        readfile.read(piece);
-        int max_tuple_num_in_piece = piece_length / this->tupleLength;
-        for (int i = 0; i < max_tuple_num_in_piece; i++) {
-            char* yuanzu = piece + i * (this->tupleLength + 1);
-            if (yuanzu[0] == '\0')
-                break;
-            bool same = true;
-            if (yuanzu[0] == 'y') { //yuanzu  option
-                for (int j = 0; j < this->key.size(); j++) { //check  primaryKey
-                    int index = this->key[j];
-                    int position = this->position[index];
-                    string parameterValue = value[index];
-                    string key = yuanzu + position + 1;
-                    if (key != parameterValue) {
-                        same = false;
-                        break;
-                    }
-                }
-            }
-            if (same) {//if same  ,quit
-                delete[] piece;
-                return;
-            }
-        }
-        delete[] piece;
+    //在tuple链表中比较，删除不合格的
+    for(it = tuple.begin(); it < tuple.end(); it++) {
+        
+    }
+    //释放内存
+    for(j = 0; j < count; j++) {
+        delete[] piece[j];
     }
 }
 
