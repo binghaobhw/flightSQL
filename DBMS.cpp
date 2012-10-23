@@ -348,6 +348,7 @@ void DBMS::Compare(int processed, string tableName,
                 }
             }
             count++;
+            //hheheh
         }
         
     }
