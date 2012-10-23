@@ -14,9 +14,9 @@
 #include <io.h>
 #include <string>
 #include <vector>
+#include <list>
 #include <algorithm>
-#include "linkedlist.h"
-//#include <boost/regex.hpp>
+#include "myh.h"
 
 #define NOTUSE 1
 #define TABLEEXISTED 2
@@ -38,14 +38,12 @@ public:
     bool IsDigit(string str);
     string Parse(string words);
     void SetDirPath(string path);
-    void ParseSelect(string sentence, string &select);
-    void ParseFrom(string sentence, string &from);
-    void ParseInsert(string sentence, string& tableFileName, int& tableSize, 
-                     paralist* list, int PrimaryKeyIndex[], int& PrimaryKeySize);
-    void ParseInsert(string words, string& table, vector<string>& value);
+    void ParseSelect(string sentence, vector<string>& attribute, 
+                     vector<string>& table, vector<string>& condition);
     void GetTableInfo(string tableName);
     void ReadModel(string tableName, string& content);
     void WriteModel(string& content, int mode);
+    void Compare(int processed, string tableName, string col, string op, string value);
     
     int CreateDatabase(string databaseName);
     int DropDatabase(string databaseName);

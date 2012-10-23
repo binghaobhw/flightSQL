@@ -4,8 +4,6 @@
  * 
  * Created on 2012年10月15日, 下午2:49
  */
-#include <bits/basic_string.h>
-
 #include "DBMS.h"
 
 DBMS::DBMS() {
@@ -185,172 +183,6 @@ void DBMS::ParseSelect(string sentence, vector<string>& attribute,
     }
 }
 
-void DBMS::ParseFrom(string sentence, string& from) {
-    string::size_type i = 0, j = 0, k = 0;
-    i = sentence.find("from", 0);
-    if (i != string::npos) {
-        j = sentence.find("where", 0);
-        if (j != string::npos) {
-            from = sentence.substr(i + 4, j - i - 4);
-        } else {
-            from = sentence.substr(i + 4);
-        }
-    }
-    i = 0;
-    while (true) {
-        i = from.find(" ", i);
-        if (i != string::npos) {
-            from.erase(i, 1);
-        } else {
-            break;
-        }
-    }
-}
-
-void DBMS::ParseInsert(string sentence, string& tableFileName, int& tableSize,
-        paralist* list, int primaryKeyIndex[], int& primaryKeySize) {
-    string::size_type i = 0, j = 0, k = 0;
-    string modelPath = GetWholeName(currentDb) + "\\model.md";
-    fstream fileIO;
-    char content[1024];
-    int fileSize = 0;
-    int typeSize = 0;
-    int listSize = 0;
-    string values = "";
-    int positionList[10];
-    int valueSize[10];
-    int columns = 0;
-    primaryKeySize = 0;
-    string container = "";
-    string table = "";
-    string temp = "";
-    sentence = Replace(sentence, " ", "");
-
-    i = sentence.find("insert into", 0);
-    if (i != string::npos) {
-        i = 10;
-        j = sentence.find(" ", i);
-        if (j != string::npos) {
-            j++;
-            k = sentence.find(" ", j);
-            if (k != string::npos) {
-                tableFileName = sentence.substr(j, k - j);
-                fileIO.open(modelPath.c_str(), ios::binary | ios::in);
-                fileIO.seekg(0, ios::end);
-                fileSize = fileIO.tellg();
-
-                fileIO.seekg(0, ios::beg);
-                fileIO.read(content, fileSize);
-                fileIO.close();
-
-                container.insert(0, content, fileSize);
-                int m = 0, n = 0;
-                while (true) {
-                    m = container.find('\0', m);
-                    if (m != string::npos) {
-                        m++;
-                        n = container.find('\0', m);
-                        if (n != string::npos) {
-                            table = container.substr(m, n - m);
-                        } else {
-                            table = container.substr(m);
-                        }
-                        if (table.substr(0, tableFileName.length()) == tableFileName) {
-                            /*  插入位置,字节大小*/
-                            i = 0;
-                            while (true) {
-                                i = table.find(" ", i);
-                                if (i != string::npos) {
-                                    i++;
-                                    j = table.find(" ", i);
-                                    if (j != string::npos) {
-                                        temp = table.substr(i, j - i);
-                                    } else {
-                                        temp = table.substr(i);
-                                    }
-                                    if (IsDigit(temp)) {
-
-                                        typeSize = atoi(temp.c_str());
-                                        tableSize += typeSize;
-                                        listSize++;
-                                        positionList[listSize] = tableSize;
-                                        valueSize[listSize - 1] = positionList[listSize] - positionList[listSize - 1];
-
-                                        continue;
-                                    } else if (temp == "char") {
-                                        columns++;
-                                        continue;
-                                    } else if (temp == "*") {
-                                        primaryKeyIndex[primaryKeySize++] = columns - 1;
-                                    } else if (temp == "int") {
-                                        columns++;
-                                        typeSize = 1;
-                                        valueSize[listSize] = typeSize;
-                                        tableSize += typeSize;
-                                        listSize++;
-                                        positionList[listSize] = tableSize;
-                                        valueSize[listSize - 1] = positionList[listSize] - positionList[listSize - 1];
-                                        listSize++;
-                                        continue;
-                                    }
-
-                                } else {
-                                    break;
-                                }
-                            }
-                            break;
-                        } else {
-                            continue;
-                        }
-
-                    } else {
-                        return;
-                    }
-                }
-
-
-            }
-        }
-
-    }
-    //  插入内容
-    i = sentence.find("(", 0);
-    if (i != string::npos) {
-        i++;
-        j = sentence.find(")", i);
-        if (j != string::npos) {
-            values = sentence.substr(i, j - i);
-        } else {
-            return;
-        }
-    }
-    i = 0;
-    while (true) {
-        i = values.find(",", i);
-        if (i != string::npos) {
-            values.replace(i, 1, " ");
-        } else {
-            break;
-        }
-    }
-    values = Replace(values, " ", "");
-    i = 0;
-    int count = 0;
-    while (true) {
-        j = values.find(" ", i);
-        if (j != string::npos) {
-            list->add((char*) (values.substr(i, j - i).c_str()), positionList[count], valueSize[count]);
-            i = j + 1;
-            count++;
-        } else {
-            list->add(((char*) values.substr(i).c_str()), positionList[count], valueSize[count]);
-        }
-    }
-
-    tableFileName.insert(0, GetWholeName(currentDb).append("\\"));
-    tableFileName.append(".tab");
-
-}
 
 void DBMS::GetTableInfo(string tableName) {
     if (currentDb.length() == 0) {
@@ -483,6 +315,51 @@ void DBMS::WriteModel(string& content, int mode) {
         fileIO.open(modelPath.c_str(), ios::binary | ios::out);
         fileIO.write(content.c_str(), content.length());
         fileIO.close();
+    }
+}
+void DBMS::Compare(int processed, string tableName, 
+                   string col, string op, string value)
+{
+    list<char*> tuple;
+    string filePath;
+    myfstream fs;
+    filePath = GetWholeName(currentDb) + "\\";
+    //无需读temp
+    if(processed == 0) {
+        filePath += tableName + ".tab";
+    }
+    //读temp
+    else {
+        filePath += "temp.tab";
+    }
+    fs.open(filePath);
+    while (!readfile.end()) {
+        char* piece = new char[piece_length];
+        readfile.read(piece);
+        int max_tuple_num_in_piece = piece_length / this->tupleLength;
+        for (int i = 0; i < max_tuple_num_in_piece; i++) {
+            char* yuanzu = piece + i * (this->tupleLength + 1);
+            if (yuanzu[0] == '\0')
+                break;
+            bool same = true;
+            if (yuanzu[0] == 'y') { //yuanzu  option
+                for (int j = 0; j < this->key.size(); j++) { //check  primaryKey
+                    int index = this->key[j];
+                    int position = this->position[index];
+                    string parameterValue = value[index];
+                    string key = yuanzu + position + 1;
+                    if (key != parameterValue) {
+                        same = false;
+                        break;
+                    }
+                }
+            }
+            if (same) {//if same  ,quit
+                delete[] piece;
+                return;
+            }
+        }
+        delete[] piece;
     }
 }
 
@@ -770,9 +647,12 @@ void DBMS::Select(string sentence) {
         cout << "choose a database first!" << endl;
         return;
     }
+    int processed = 0;
     int i,j,k,m;
     string table1, table2;
     string col1, col2;
+    string op;
+    string value;
     vector<string> attribute;
     vector<string> table;
     vector<string> condition;
@@ -793,7 +673,8 @@ void DBMS::Select(string sentence) {
                 m++;
                 col2 = p->substr(j);
                 table2 = p->substr(m, j - m - 1); 
-                Equi_Join(table1.c_str(), table2.c_str(), col1.c_str(), col2.c_str());
+                Equi_Join((char*)table1.c_str(), (char*)table2.c_str(), (char*)col1.c_str(), (char*)col2.c_str());
+                processed = 1;
                 break;
             }
             else break;
@@ -806,7 +687,14 @@ void DBMS::Select(string sentence) {
             i++;
             j = p->find(".", i);
             if(j == string::npos) {
-                
+                j = p->find(" ", 0);
+                k = p->find(" ", j + 1);
+                table1 = p->substr(0, i - 1);
+                col1 = p->substr(i, j - i);
+                op = p->substr(j + 1, k - j - 1);
+                value = p->substr(k + 1);
+                Compare(processed, table1, col1, op, value);
+                processed = 1;
             }
         }
     }
@@ -910,89 +798,49 @@ void DBMS::Insert(string words) {
     }
     string tabFile = "";
     tabFile = GetWholeName(this->currentDb) + "\\" + this->currentTable + ".tab";
-    fstream writeTable;
-    writeTable.open(tabFile.c_str(), ios::in | ios::out | ios::binary);
 
-    writeTable.seekp(0, ios::end);
-    int FileLength = writeTable.tellp();
-    int tableLength = this->tupleLength;
-    int Num_Of_Yuanzu = maxReadSize / (tableLength + 1);
-    int readSize = Num_Of_Yuanzu * (tableLength + 1);
-
-    int accumulate = 0;
-    writeTable.seekg(0);
-    while (1) {
-        int distance = FileLength - writeTable.tellg();
-
-        if (distance <= readSize) {
-            char* tempPiece = new char[readSize + 1];
-            char* yuanzu = new char[tableLength + 1];
-            writeTable.read(tempPiece, distance); //get pieces
-            //option
-            //  get i yuanzu
-            int num_of_yuanzu = distance / (tableLength + 1);
-            for (int i = 0; i < num_of_yuanzu; i++) {
-                yuanzu = tempPiece + i * (tableLength + 1);
-
-                bool same = true;
-                if (yuanzu[0] == 'y') { //yuanzu  option
-                    for (int j = 0; j < this->key.size(); j++) { //check  primaryKey
-                        int index = this->key[j];
-                        int position = this->position[index];
-                        string parameterValue = value[index];
-                        string key = yuanzu + position + 1;
-                        if (key != parameterValue) {
-                            same = false;
-                            break;
-                        }
+    myfstream readfile; /*get file piece*/
+    readfile.open(tabFile);
+    while (!readfile.end()) {
+        char* piece = new char[piece_length];
+        readfile.read(piece);
+        int max_tuple_num_in_piece = piece_length / this->tupleLength;
+        for (int i = 0; i < max_tuple_num_in_piece; i++) {
+            char* yuanzu = piece + i * (this->tupleLength + 1);
+            if (yuanzu[0] == '\0')
+                break;
+            bool same = true;
+            if (yuanzu[0] == 'y') { //yuanzu  option
+                for (int j = 0; j < this->key.size(); j++) { //check  primaryKey
+                    int index = this->key[j];
+                    int position = this->position[index];
+                    string parameterValue = value[index];
+                    string key = yuanzu + position + 1;
+                    if (key != parameterValue) {
+                        same = false;
+                        break;
                     }
                 }
-                if (same) { //if same  ,quit
-                    delete[] yuanzu;
-                    delete[] tempPiece;
-                    return;
-                }
             }
-            delete[] yuanzu;
-            delete[] tempPiece;
-            break;
-        } else {
-            char* tempPiece = new char[readSize + 1];
-            char* yuanzu = new char[tableLength + 1];
-            writeTable.read(tempPiece, readSize);
-            //  piece  option
-            for (int i = 0; i < Num_Of_Yuanzu; i++) {
-                yuanzu = tempPiece + i * (tableLength + 1);
-                //yuanzu  option
-                bool same = true;
-                if (yuanzu[0] == 'y') { //yuanzu  option
-                    for (int j = 0; j < this->key.size(); j++) { //check  primaryKey
-                        int index = this->key[j];
-                        int position = this->position[index];
-                        string parameterValue = value[index];
-                        string key = yuanzu + position + 1;
-                        if (key != parameterValue) {
-                            same = false;
-                            break;
-                        }
-                    }
-                }
-                if (same) { //if same  ,quit
-                    delete[] yuanzu;
-                    delete[] tempPiece;
-                    return;
-                }
+            if (same) {//if same  ,quit
+                delete[] piece;
+                return;
             }
-            delete[] yuanzu;
-            delete[] tempPiece;
-            accumulate++;
-            writeTable.seekg(accumulate * readSize);
         }
+        delete[] piece;
     }
-
+    
+    fstream writeTable;
     writeTable.seekp(0, ios::end);
-    writeTable.put('y');
+    int filelength = writeTable.tellp();
+    //补全piece不足一个元组的文件位置
+    int next_file_end = filelength + this->tupleLength + 1;
+    int piece_eage = next_file_end / piece_length *piece_length;
+    if ((piece_eage > filelength) && (piece_eage < next_file_end))
+        while (writeTable.tellp() < piece_eage)
+            writeTable.put('\0');
 
+    writeTable.put('y');
     for (int m = 0; m < this->column.size(); m++) {
         int contentSize = this->size[m];
         string content = value[m];
@@ -1009,6 +857,130 @@ void DBMS::Insert(string words) {
 
 
 }
+//void DBMS::Insert(string words) {
+//    string tableName;
+//    string::size_type x, y;
+//    x = words.find("insert into", 0);
+//    if (x != string::npos) {
+//        x += 12;
+//        y = words.find(" ", x);
+//        if (y != string::npos) {
+//            tableName = words.substr(x, y - x);
+//        }
+//    } else return;
+//
+//    GetTableInfo(tableName);
+//
+//    vector<string> value;
+//    int first = 0;
+//    int second = 0;
+//    for (int k = 0; k<this->column.size(); k++) {
+//        first = words.find("\"", first);
+//        second = words.find("\"", first + 1);
+//        value.push_back(words.substr(first + 1, second - first - 1));
+//        first = second + 1;
+//    }
+//    string tabFile = "";
+//    tabFile = GetWholeName(this->currentDb) + "\\" + this->currentTable + ".tab";
+//    fstream writeTable;
+//    writeTable.open(tabFile.c_str(), ios::in | ios::out | ios::binary);
+//
+//    writeTable.seekp(0, ios::end);
+//    int FileLength = writeTable.tellp();
+//    int tableLength = this->tupleLength;
+//    int Num_Of_Yuanzu = maxReadSize / (tableLength + 1);
+//    int readSize = Num_Of_Yuanzu * (tableLength + 1);
+//
+//    int accumulate = 0;
+//    writeTable.seekg(0);
+//    while (1) {
+//        int distance = FileLength - writeTable.tellg();
+//
+//        if (distance <= readSize) {
+//            char* tempPiece = new char[readSize + 1];
+//            char* yuanzu = new char[tableLength + 1];
+//            writeTable.read(tempPiece, distance); //get pieces
+//            //option
+//            //  get i yuanzu
+//            int num_of_yuanzu = distance / (tableLength + 1);
+//            for (int i = 0; i < num_of_yuanzu; i++) {
+//                yuanzu = tempPiece + i * (tableLength + 1);
+//
+//                bool same = true;
+//                if (yuanzu[0] == 'y') { //yuanzu  option
+//                    for (int j = 0; j < this->key.size(); j++) { //check  primaryKey
+//                        int index = this->key[j];
+//                        int position = this->position[index];
+//                        string parameterValue = value[index];
+//                        string key = yuanzu + position + 1;
+//                        if (key != parameterValue) {
+//                            same = false;
+//                            break;
+//                        }
+//                    }
+//                }
+//                if (same) { //if same  ,quit
+//                    delete[] yuanzu;
+//                    delete[] tempPiece;
+//                    return;
+//                }
+//            }
+//            delete[] yuanzu;
+//            delete[] tempPiece;
+//            break;
+//        } else {
+//            char* tempPiece = new char[readSize + 1];
+//            char* yuanzu = new char[tableLength + 1];
+//            writeTable.read(tempPiece, readSize);
+//            //  piece  option
+//            for (int i = 0; i < Num_Of_Yuanzu; i++) {
+//                yuanzu = tempPiece + i * (tableLength + 1);
+//                //yuanzu  option
+//                bool same = true;
+//                if (yuanzu[0] == 'y') { //yuanzu  option
+//                    for (int j = 0; j < this->key.size(); j++) { //check  primaryKey
+//                        int index = this->key[j];
+//                        int position = this->position[index];
+//                        string parameterValue = value[index];
+//                        string key = yuanzu + position + 1;
+//                        if (key != parameterValue) {
+//                            same = false;
+//                            break;
+//                        }
+//                    }
+//                }
+//                if (same) { //if same  ,quit
+//                    delete[] yuanzu;
+//                    delete[] tempPiece;
+//                    return;
+//                }
+//            }
+//            delete[] yuanzu;
+//            delete[] tempPiece;
+//            accumulate++;
+//            writeTable.seekg(accumulate * readSize);
+//        }
+//    }
+//
+//    writeTable.seekp(0, ios::end);
+//    writeTable.put('y');
+//
+//    for (int m = 0; m < this->column.size(); m++) {
+//        int contentSize = this->size[m];
+//        string content = value[m];
+//        int valueType = this->type[m];
+//        if (valueType == 0) {
+//            content.append(contentSize, '\0');
+//            writeTable.write(content.data(), contentSize);
+//        } else if (valueType == 1) {
+//            int number = atoi(content.data());
+//            writeTable.write(reinterpret_cast<char*> (&number), contentSize);
+//        }
+//    }
+//    writeTable.close();
+//
+//
+//}
 
 void DBMS::Equi_Join(char* tableName1, char* tableName2, char* Col1, char* Col2) {
     int duqu1[6] = {0}; //duqu1、duqu2记录读取规格
