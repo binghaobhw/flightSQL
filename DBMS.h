@@ -40,10 +40,11 @@ public:
     void SetDirPath(string path);
     void ParseSelect(string sentence, vector<string>& attribute, 
                      vector<string>& table, vector<string>& condition);
-    void GetTableInfo(string tableName);
-    void ReadModel(string tableName, string& content);
+    void GetTableInfo(string tableName, int temp);
+    void ReadModel(string modelPath, string& content);
     void WriteModel(string& content, int mode);
-    void Compare(int processed, string tableName, string col, string op, string value);
+    void Compare(int processed, string tableName, vector<string>& col, 
+                 vector<string>& op, vector<string>& value);
     
     int CreateDatabase(string databaseName);
     int DropDatabase(string databaseName);
@@ -54,10 +55,10 @@ public:
     void Describe(string tableName);
     void ShowTables();
     void Select(string sentence);
-    void Projection(char* tableFileName, int tableSize, int* positionList, 
-                    int* valueSize, int list_size);
+    void Projection(string filePath, vector<string>& attribute);
     void Insert(string words);
-    void Equi_Join( char* tableName1, char* tableName2, char* Col1, char* Col2);
+    void Equi_Join(char* tableName1, char* tableName2, char* Col1, char* Col2);
+    void Display();
 
 private:
     string dirPath;
@@ -66,7 +67,7 @@ private:
     string currentTable;
     vector<string> column;
     vector<int> size;  //
-    vector<int> type;
+    vector<int> type;  //0-char 1-int
     vector<int> position;
     vector<int> key;
     int tupleLength;

@@ -126,13 +126,13 @@ void DBMS::ParseSelect(string sentence, vector<string>& attribute,
             i = 0;
             j = 0;
             while(1) {
-                i = sentence.find("\"", j);
+                i = str.find("\"", j);
                 if(i != string::npos) {
                     i++;
-                    j = sentence.find("\"", i);
+                    j = str.find("\"", i);
                     if(j != string::npos) {
                         j++;
-                        attribute.push_back(sentence.substr(i, j - i));
+                        attribute.push_back(str.substr(i, j - i));
                     }
                 }
                 else break;
@@ -150,13 +150,13 @@ void DBMS::ParseSelect(string sentence, vector<string>& attribute,
         i = 0;
         j = 0;
         while(1) {
-            i = sentence.find("\"", j);
+            i = str.find("\"", j);
             if(i != string::npos) {
                 i++;
-                j = sentence.find("\"", i);
+                j = str.find("\"", i);
                 if(j != string::npos) {
                     j++;
-                    table.push_back(sentence.substr(i, j - i));
+                    table.push_back(str.substr(i, j - i));
                 }
             }
             else break;
@@ -169,13 +169,13 @@ void DBMS::ParseSelect(string sentence, vector<string>& attribute,
         i = 0;
         j = 0;
         while(1) {
-            i = sentence.find("\"", j);
+            i = str.find("\"", j);
             if(i != string::npos) {
                 i++;
-                j = sentence.find("\"", i);
+                j = str.find("\"", i);
                 if(j != string::npos) {
                     j++;
-                    condition.push_back(sentence.substr(i, j - i));
+                    condition.push_back(str.substr(i, j - i));
                 }
             }
             else break;
@@ -184,13 +184,19 @@ void DBMS::ParseSelect(string sentence, vector<string>& attribute,
 }
 
 
-void DBMS::GetTableInfo(string tableName) {
+void DBMS::GetTableInfo(string tableName, int temp) 
+{
     if (currentDb.length() == 0) {
         cout << "choose a database first!" << endl;
         return;
     }
     string content = "";
-    ReadModel(tableName, content);
+    string modelPath = this->GetWholeName(this->currentDb);
+    if(temp == 0)
+        modelPath += "\\model.md";
+    else
+        modelPath += "\\temp.md";
+    ReadModel(modelPath, content);
 
     currentTable = tableName;
     column.clear();
@@ -202,7 +208,6 @@ void DBMS::GetTableInfo(string tableName) {
 
     string::size_type i, j, k;
     string tableInfo;
-    string temp;
 
     i = content.find("~" + currentTable, 0);
     if (i != string::npos) {
@@ -286,9 +291,8 @@ void DBMS::GetTableInfo(string tableName) {
 
 }
 
-void DBMS::ReadModel(string tableName, string& content) {
+void DBMS::ReadModel(string modelPath, string& content) {
     char c[1024];
-    string modelPath = GetWholeName(currentDb) + "\\model.md";
     fstream fileIO;
     fileIO.open(modelPath.c_str(), ios::binary | ios::in);
     int fileSize = 0; //model.md的大小
@@ -299,7 +303,6 @@ void DBMS::ReadModel(string tableName, string& content) {
     fileIO.read(c, fileSize);
     fileIO.close();
     content.append(c, fileSize);
-
 
 }
 
@@ -317,50 +320,171 @@ void DBMS::WriteModel(string& content, int mode) {
         fileIO.close();
     }
 }
-void DBMS::Compare(int processed, string tableName, 
-                   string col, string op, string value)
+void DBMS::Compare(int processed, string tableName, vector<string>& col, 
+                   vector<string>& op, vector<string>& value)
 {
     list<char*> tuple;
-    list<char*>::iterator it;
+    list<char*>::iterator charIt;
+    fstream writeTemp;
     char** piece;
     char* yuanzu;
-    int i,j;
+    char p[20];
+    int i,j,x,y;
+    int digitCol, digitValue;
+    int type, size, position;
     int count;
+    int ope;  /* 0-=  1->  2-< 3->= 4-<= */
     string filePath;
+    string strCol;
     myfstream fs;
     filePath = GetWholeName(currentDb) + "\\";
-    //无需读temp
+    //无需读TEMP,读表文件
     if(processed == 0) {
         filePath += tableName + ".tab";
-        this->GetTableInfo(tableName);
-        fs.open(filePath);
-        count = 0;
-        while (!fs.end()) {
-            piece[count] = new char[piece_length];
-            fs.read(piece);
-            int max_tuple_num_in_piece = piece_length / this->tupleLength;
-            for (i = 0; i < max_tuple_num_in_piece; i++) {
-                yuanzu = piece[count] + i * (this->tupleLength + 1);
-                if (yuanzu[0] == '\0')
-                    break;
-                if (yuanzu[0] == 'y') { //yuanzu  option
-                    tuple.push_back(yuanzu);
-                }
-            }
-            count++;
-            //hheheh
-        }
-        
+        this->GetTableInfo(tableName, 0);
     }
-    //读temp
+    //读TEMP
     else {
-        filePath += "temp.tab";
-        this->GetTableInfo("TEMP");
+        filePath += "temp.tmp";
+        this->GetTableInfo("TEMP", 1);
+    }
+    //读取
+    fs.open(filePath);
+    count = 0;
+    while (!fs.end()) {
+        piece[count] = new char[piece_length];
+        fs.read(piece[count]);
+        int max_tuple_num_in_piece = piece_length / this->tupleLength;
+        for (i = 0; i < max_tuple_num_in_piece; i++) {
+            yuanzu = piece[count] + i * (this->tupleLength + 1);
+            if (yuanzu[0] == '\0')
+                break;
+            if (yuanzu[0] == 'y') { //yuanzu  option
+                tuple.push_back(yuanzu);
+            }
+        }
+        count++;
     }
     //在tuple链表中比较，删除不合格的
-    for(it = tuple.begin(); it < tuple.end(); it++) {
-        
+    for(i = 0; i < op.size(); i++) {
+        if(op[i] == "=") 
+            ope = 0;
+        if(op[i] == ">")
+            ope = 1;
+        if(op[i] == "<")
+            ope = 2;
+        if(op[i] == ">=")
+            ope = 3;
+        if(op[i] == "<=")
+            ope = 4;
+        for(j = 0; j < this->column.size(); j++) {
+            if(column[j] == col[i]) {
+                type = this->type[j];
+                if(type == 1)
+                    digitValue = atoi(value[i].c_str());
+                size = this->size[j];
+                position = this->position[j];
+                position++;
+                break;
+            }
+        }
+        for(charIt = tuple.begin(); charIt != tuple.end(); charIt++) {
+            //比int型
+            if(type == 1) {      
+                for(x = 0; x < size; x++) {
+                    *(reinterpret_cast<char* >(&digitCol) + x)= (*charIt)[position + x];
+                }
+                switch(ope) {
+                case 0:
+                    if(digitCol != digitValue) {
+                        charIt = tuple.erase(charIt);
+                        charIt--;
+                    }
+                    break;
+                case 1:
+                    if(!(digitCol > digitValue)) {
+                        charIt = tuple.erase(charIt);
+                        charIt--;
+                    }
+                    break;
+                case 2:
+                    if(!(digitCol < digitValue)) {
+                        charIt = tuple.erase(charIt);
+                        charIt--;
+                    }
+                    break;
+                case 3:
+                    if(!(digitCol >= digitValue)) {
+                        charIt = tuple.erase(charIt);
+                        charIt--;
+                    }
+                    break;
+                case 4:
+                    if(!(digitCol <= digitValue)) {
+                        charIt = tuple.erase(charIt);
+                        charIt--;
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+            //比char型
+            else {
+                strCol = (*charIt) + position;
+                value[i] = value[i].substr(0, size);
+                if(strCol.length() > size)
+                    strCol = strCol.substr(0, size);                
+                switch(ope) {
+                    case 0:
+                        if(!(strCol == value[i])) {
+                            charIt = tuple.erase(charIt);
+                            charIt--;
+                        }
+                        break;
+                    case 1:
+                        if(!(strCol > value[i])) {
+                            charIt = tuple.erase(charIt);
+                            charIt--;
+                        }
+                        break;
+                    case 2:
+                        if(!(strCol < value[i])) {
+                            charIt = tuple.erase(charIt);
+                            charIt--;
+                        }
+                        break;
+                    case 3:
+                        if(!(strCol >= value[i])) {
+                            charIt = tuple.erase(charIt);
+                            charIt--;
+                        }
+                        break;
+                    case 4:
+                        if(!(strCol <= value[i])) {
+                            charIt = tuple.erase(charIt);
+                            charIt--;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
     }
+    //写入temp.tmp
+    writeTemp.open("temp.tmp", ios::binary | ios::out);
+    for(charIt = tuple.begin(); charIt != tuple.end(); charIt++) {
+        j += (tupleLength + 1);
+        x = piece_length - (j % piece_length) - this->tupleLength - 1;
+        if(x < 0) {
+            for(y = x; y < 0; y++) {
+                writeTemp.put('\0');
+            }
+        }   
+        writeTemp.write(*charIt, this->tupleLength + 1);
+    }
+    writeTemp.close();
     //释放内存
     for(j = 0; j < count; j++) {
         delete[] piece[j];
@@ -372,6 +496,7 @@ int DBMS::CreateDatabase(string databaseName) {
     string fullName = GetWholeName(databaseName);
     string modelPath = fullName + "\\model.md";
     string tempPath = fullName + "\\temp.tmp";
+    string tempMdPath = fullName +"\\temp.md";
     ofstream fileIO;
     switch (_mkdir(fullName.c_str())) {
         case 0:
@@ -379,7 +504,8 @@ int DBMS::CreateDatabase(string databaseName) {
             fileIO.close();
             fileIO.open(tempPath.c_str());
             fileIO.close();
-
+            fileIO.open(tempMdPath.c_str());
+            fileIO.close();
             res = 0;
             break;
         case EEXIST:
@@ -447,6 +573,7 @@ int DBMS::CreateTable(string sentence) {
     const string primaryKey = "primary key";
     const char star = '*';
     int res = 0;
+    string modelPath = this->GetWholeName(this->currentDb) + "\\model.md";
     string tableName = "";
     string::size_type i, j, k;
     sentence = sentence.erase(0, 12);
@@ -462,7 +589,7 @@ int DBMS::CreateTable(string sentence) {
         return -1;
 
     string c;
-    ReadModel(tableName, c);
+    ReadModel(modelPath, c);
     i = c.find("~" + tableName, 0);
     if (i != string::npos) {
         res = TABLEEXISTED;
@@ -542,7 +669,8 @@ int DBMS::DropTable(string words) {
         tableName = words.substr(11);
     }
     string c;
-    ReadModel(tableName, c);
+    string modelPath = this->GetWholeName(this->currentDb) + "\\model.md";
+    ReadModel(modelPath, c);
     i = c.find("~" + tableName, 0);
     if (i != string::npos) {
         j = c.find("~", i + 1);
@@ -568,7 +696,7 @@ void DBMS::Describe(string tableName) {
         cout << "choose a database first!" << endl;
         return;
     }
-    GetTableInfo(tableName);
+    GetTableInfo(tableName, 0);
     char s[10];
     string description = currentTable;
     description += "(";
@@ -651,130 +779,169 @@ void DBMS::Select(string sentence) {
         cout << "choose a database first!" << endl;
         return;
     }
-    int processed = 0;
+    int processed = 0;  //  0表示还没有写入过temp.tmp
     int i,j,k,m;
     string table1, table2;
     string col1, col2;
-    string op;
-    string value;
+    string filePath;
     vector<string> attribute;
     vector<string> table;
     vector<string> condition;
-    ParseSelect(sentence, attribute, table, condition);
+    vector<string> col;  //选择所需属性名
+    vector<string> ope;  //选择所需比较符
+    vector<string> val;  //选择所需值
     vector<string>::iterator p;
-    //找等值连接所需参数
-    for(p = condition.begin(); p != condition.end(); p++) {
-        i = p->find(".", 0);
-        if(i != string::npos) {
-            i++;
-            j = p->find(".", i);
-            if(j != string::npos) {
-                k = p->find(" ", i);
-                col1 = p->substr(i, k - i);
-                table1 = p->substr(0, i - 1);
-                j++;
-                m = p->rfind(" ", j);
-                m++;
-                col2 = p->substr(j);
-                table2 = p->substr(m, j - m - 1); 
-                Equi_Join((char*)table1.c_str(), (char*)table2.c_str(), (char*)col1.c_str(), (char*)col2.c_str());
-                processed = 1;
-                break;
-            }
-            else break;
-        }
-    }
-    //得到选择所需参数
-    for(p = condition.begin(); p != condition.end(); p++) {
-        i = p->find(".", 0);
-        if(i != string::npos) {
-            i++;
-            j = p->find(".", i);
-            if(j == string::npos) {
-                j = p->find(" ", 0);
-                k = p->find(" ", j + 1);
-                table1 = p->substr(0, i - 1);
-                col1 = p->substr(i, j - i);
-                op = p->substr(j + 1, k - j - 1);
-                value = p->substr(k + 1);
-                Compare(processed, table1, col1, op, value);
-                processed = 1;
+    /*  解析语句  */
+    ParseSelect(sentence, attribute, table, condition);
+    /*  有where条件 */
+    if(condition.size() != 0) {
+        //找等值连接所需参数
+        for(p = condition.begin(); p != condition.end(); p++) {
+            i = p->find(".", 0);
+            if(i != string::npos) {
+                i++;
+                j = p->find(".", i);
+                if(j != string::npos) {
+                    k = p->find(" ", i);
+                    col1 = p->substr(i, k - i);
+                    table1 = p->substr(0, i - 1);
+                    j++;
+                    m = p->rfind(" ", j);
+                    m++;
+                    col2 = p->substr(j);
+                    table2 = p->substr(m, j - m - 1); 
+                    /*  等值连接  */
+                    Equi_Join((char*)table1.c_str(), (char*)table2.c_str(), (char*)col1.c_str(), (char*)col2.c_str());
+                    processed = 1;
+                    break;
+                }
+                else break;
             }
         }
+
+        //得到选择所需参数
+        for(p = condition.begin(); p != condition.end(); p++) {
+            i = p->find(".", 0);
+            if(i != string::npos) {
+                i++;
+                j = p->find(".", i);
+                if(j == string::npos) {
+                    j = p->find(" ", 0);
+                    k = p->find(" ", j + 1);
+                    table1 = p->substr(0, i - 1);
+                    col.push_back(p->substr(i, j - i));
+                    ope.push_back(p->substr(j + 1, k - j - 1));
+                    val.push_back(p->substr(k + 1));
+                }
+            }
+        }
+        /*  条件选择  */
+        if(col.size() != 0) {
+            Compare(processed, table1, col, ope, val);
+            processed = 1;
+        }
     }
-    
-    
-    
-    
-    
-    
-
-
+    /*  无需投影  */
+    if(attribute.size() == 1 && attribute[0] == "*") {
+        Display();
+        return;
+    }
+    /*  从temp.tmp投影  */
+    if(processed == 1) {
+        filePath += "temp.tmp";
+        this->GetTableInfo("TEMP", 1);
+    }
+    /*  从表文件投影  */
+    else {
+        filePath += table[0] + ".tab";
+        this->GetTableInfo(table[0], 0);
+    }
+    /*  投影*/
+    Projection(filePath, attribute);   
 }
 
-void DBMS::Projection(char* tableFileName, int tableSize, int* positionList,
-        int* valueSize, int list_size) {
-    fstream selectTable;
-    fstream writeTemp;
-    writeTemp.open("temp.tmp", ios::out | ios::binary);
-    selectTable.open(tableFileName, ios::in | ios::binary);
-    selectTable.seekg(0, ios::end);
-    int fileSize = selectTable.tellg();
-    int Num_Of_Yuanzu = maxReadSize / tableSize;
-    int readSize = Num_Of_Yuanzu * tableSize;
-    int accumulate = 0;
-
-    selectTable.seekg(0);
-
-    while (1) {
-        int distance = fileSize - selectTable.tellg();
-        if (distance <= readSize) {
-            char* tempPiece = new char[readSize + 1];
-            char* yuanzu = new char[tableSize + 1];
-            selectTable.read(tempPiece, distance); //get pieces
-            //option
-
-            //  get i yuanzu
-            int num_of_yuanzu = distance / tableSize;
-            for (int i = 0; i < num_of_yuanzu; i++) {
-                yuanzu = tempPiece + i*tableSize;
-                //yuanzu  option
-                if (yuanzu[0] == 'y') { //yuanzu  option
-                    for (int k = 0; k < list_size; k++) {
-                        char* tempValue = yuanzu + positionList[k] + 1;
-                        writeTemp.write(tempValue, valueSize[k]);
-                    }
-                }
+void DBMS::Projection(string filePath, vector<string>& attribute)
+{
+    list<char* > tuple;
+    list<char* >::iterator charIt;
+    vector<string> colName;
+    vector<string>::iterator strIt;
+    vector<int> index;
+    char** piece;
+    char* yuanzu;
+    myfstream fs;
+    int i,j,x,y;
+    int count;
+    int digit;
+    int type, size, position;
+    string result;
+    char single[20];
+    for(i = 0; i < attribute.size(); i++) {
+        result += attribute[i];
+        result += "\t";
+    }
+    result += "\n";
+    
+    /*  去表名  */
+    for(strIt = attribute.begin(); strIt != attribute.end(); strIt++) {
+        x = strIt->find(".", 0);
+        x++;
+        colName.push_back(strIt->substr(x));
+    }
+    /*  定位  */
+    for(strIt = colName.begin(); strIt != colName.end(); strIt++) {
+        for(i = 0; i < this->column.size(); i++) {
+            if(this->column[i] == *strIt) {
+                index.push_back(i);
+                break;
             }
-            delete[] yuanzu;
-            delete[] tempPiece;
-            break;
-        } else {
-            char* tempPiece = new char[readSize + 1];
-            char* yuanzu = new char[tableSize + 1];
-            selectTable.read(tempPiece, readSize);
-            //  piece  option
-            for (int i = 0; i < Num_Of_Yuanzu; i++) {
-                yuanzu = tempPiece + i*tableSize;
-                //yuanzu  option
-                if (yuanzu[0] == 'y') { //yuanzu  option
-                    for (int k = 0; k < list_size; k++) {
-
-                        char* tempValue = yuanzu + positionList[k] + 1;
-                        writeTemp.write(tempValue, valueSize[k]);
-                    }
-                }
-            }
-            delete[] yuanzu;
-            delete[] tempPiece;
-            accumulate++;
-            selectTable.seekg(accumulate * readSize);
         }
     }
-
-
-    writeTemp.close();
-    selectTable.close();
+    //读取
+    fs.open(filePath);
+    count = 0;
+    while (!fs.end()) {
+        piece[count] = new char[piece_length];
+        fs.read(piece[count]);
+        int max_tuple_num_in_piece = piece_length / this->tupleLength;
+        for (i = 0; i < max_tuple_num_in_piece; i++) {
+            yuanzu = piece[count] + i * (this->tupleLength + 1);
+            if (yuanzu[0] == '\0')
+                break;
+            if (yuanzu[0] == 'y') { //yuanzu  option
+                tuple.push_back(yuanzu);
+            }
+        }
+        count++;
+    }
+    for(charIt = tuple.begin(); charIt != tuple.end(); charIt++) {
+        for(i = 0; i < index.size(); i++) {
+            type = this->type[index[i]];
+            size = this->size[index[i]];
+            position = this->position[index[i]] + 1;
+            if(type == 1) {
+                for(x = 0; x < size; x++) {
+                    *(reinterpret_cast<char* >(&digit) + x)= (*charIt)[position + x];
+                }
+                sprintf(single, "%d", digit);
+                result.append(single);
+                result += "\t";
+            }
+            else {
+                for(x = 0; x < size; x++) {
+                    result.append(1, (*charIt)[position + x]);
+                }
+                result += "\t";
+            }
+        }
+        result += "\n";
+    }
+    //释放内存
+    for(j = 0; j < count; j++) {
+        delete[] piece[j];
+    }
+    cout << result << endl;
+    
 }
 
 void DBMS::Insert(string words) {
@@ -789,7 +956,7 @@ void DBMS::Insert(string words) {
         }
     } else return;
 
-    GetTableInfo(tableName);
+    GetTableInfo(tableName, 0);
 
     vector<string> value;
     int first = 0;
@@ -835,6 +1002,7 @@ void DBMS::Insert(string words) {
     }
     
     fstream writeTable;
+    writeTable.open(tabFile.c_str(), ios::binary | ios::out | ios::in);
     writeTable.seekp(0, ios::end);
     int filelength = writeTable.tellp();
     //补全piece不足一个元组的文件位置
@@ -861,151 +1029,28 @@ void DBMS::Insert(string words) {
 
 
 }
-//void DBMS::Insert(string words) {
-//    string tableName;
-//    string::size_type x, y;
-//    x = words.find("insert into", 0);
-//    if (x != string::npos) {
-//        x += 12;
-//        y = words.find(" ", x);
-//        if (y != string::npos) {
-//            tableName = words.substr(x, y - x);
-//        }
-//    } else return;
-//
-//    GetTableInfo(tableName);
-//
-//    vector<string> value;
-//    int first = 0;
-//    int second = 0;
-//    for (int k = 0; k<this->column.size(); k++) {
-//        first = words.find("\"", first);
-//        second = words.find("\"", first + 1);
-//        value.push_back(words.substr(first + 1, second - first - 1));
-//        first = second + 1;
-//    }
-//    string tabFile = "";
-//    tabFile = GetWholeName(this->currentDb) + "\\" + this->currentTable + ".tab";
-//    fstream writeTable;
-//    writeTable.open(tabFile.c_str(), ios::in | ios::out | ios::binary);
-//
-//    writeTable.seekp(0, ios::end);
-//    int FileLength = writeTable.tellp();
-//    int tableLength = this->tupleLength;
-//    int Num_Of_Yuanzu = maxReadSize / (tableLength + 1);
-//    int readSize = Num_Of_Yuanzu * (tableLength + 1);
-//
-//    int accumulate = 0;
-//    writeTable.seekg(0);
-//    while (1) {
-//        int distance = FileLength - writeTable.tellg();
-//
-//        if (distance <= readSize) {
-//            char* tempPiece = new char[readSize + 1];
-//            char* yuanzu = new char[tableLength + 1];
-//            writeTable.read(tempPiece, distance); //get pieces
-//            //option
-//            //  get i yuanzu
-//            int num_of_yuanzu = distance / (tableLength + 1);
-//            for (int i = 0; i < num_of_yuanzu; i++) {
-//                yuanzu = tempPiece + i * (tableLength + 1);
-//
-//                bool same = true;
-//                if (yuanzu[0] == 'y') { //yuanzu  option
-//                    for (int j = 0; j < this->key.size(); j++) { //check  primaryKey
-//                        int index = this->key[j];
-//                        int position = this->position[index];
-//                        string parameterValue = value[index];
-//                        string key = yuanzu + position + 1;
-//                        if (key != parameterValue) {
-//                            same = false;
-//                            break;
-//                        }
-//                    }
-//                }
-//                if (same) { //if same  ,quit
-//                    delete[] yuanzu;
-//                    delete[] tempPiece;
-//                    return;
-//                }
-//            }
-//            delete[] yuanzu;
-//            delete[] tempPiece;
-//            break;
-//        } else {
-//            char* tempPiece = new char[readSize + 1];
-//            char* yuanzu = new char[tableLength + 1];
-//            writeTable.read(tempPiece, readSize);
-//            //  piece  option
-//            for (int i = 0; i < Num_Of_Yuanzu; i++) {
-//                yuanzu = tempPiece + i * (tableLength + 1);
-//                //yuanzu  option
-//                bool same = true;
-//                if (yuanzu[0] == 'y') { //yuanzu  option
-//                    for (int j = 0; j < this->key.size(); j++) { //check  primaryKey
-//                        int index = this->key[j];
-//                        int position = this->position[index];
-//                        string parameterValue = value[index];
-//                        string key = yuanzu + position + 1;
-//                        if (key != parameterValue) {
-//                            same = false;
-//                            break;
-//                        }
-//                    }
-//                }
-//                if (same) { //if same  ,quit
-//                    delete[] yuanzu;
-//                    delete[] tempPiece;
-//                    return;
-//                }
-//            }
-//            delete[] yuanzu;
-//            delete[] tempPiece;
-//            accumulate++;
-//            writeTable.seekg(accumulate * readSize);
-//        }
-//    }
-//
-//    writeTable.seekp(0, ios::end);
-//    writeTable.put('y');
-//
-//    for (int m = 0; m < this->column.size(); m++) {
-//        int contentSize = this->size[m];
-//        string content = value[m];
-//        int valueType = this->type[m];
-//        if (valueType == 0) {
-//            content.append(contentSize, '\0');
-//            writeTable.write(content.data(), contentSize);
-//        } else if (valueType == 1) {
-//            int number = atoi(content.data());
-//            writeTable.write(reinterpret_cast<char*> (&number), contentSize);
-//        }
-//    }
-//    writeTable.close();
-//
-//
-//}
 
 void DBMS::Equi_Join(char* tableName1, char* tableName2, char* Col1, char* Col2) {
-    int duqu1[6] = {0}; //duqu1、duqu2记录读取规格
-    int duqu2[6] = {0};
+    int tempgs[10] = {0};
+    int tempnum = 0;
+    string tempsxname[10];
+
+    int duqu1[10] = {0}; //duqu1、duqu2记录读取规格
+    int duqu2[10] = {0};
 
     int sumdatatype1[10];
     int sumdatatype2[10];
 
     int t1sx_hao = 1; //table1中包含的属性个数,t1sx_hao-1
     int t2sx_hao = 1; //table2中包含的属性个数
-    //int colnum=0;
-    //int cols[6]={0};
+
     int sx1index = 0; //sx1index、sx2index记录连接的属性在规格中的下标
     int sx2index = 0;
     bool judge1 = false; //用来检验是否找到两个属性
     bool judge2 = false;
-    int datatypes = 0;
+    int datasize = 0;
     int datatype1 = 0; //用于连接的属性的类型，0表示int型，i>0表示char(i)
     int datatype2 = 0;
-    //int sx1num;                 //table1中包含的属性个数
-    //int sx2num;                 //table2中包含的属性个数
 
     string tname; //记录当前的表名
     string table1 = tableName1;
@@ -1014,22 +1059,24 @@ void DBMS::Equi_Join(char* tableName1, char* tableName2, char* Col1, char* Col2)
     string datatype; //记录当前数据类型名
     string sx1 = Col1;
     string sx2 = Col2;
-    // int duquindex=1;
+
+    
     duqu1[0] = 1;
     duqu2[0] = 1;
 
     fstream binaryio;
-    binaryio.open("E:/temp.dat", ios::in | ios::binary);
+    binaryio.open("model.tab", ios::in | ios::binary | ios::out);
 
 
     char *tempchar = new char;
     char tmpchars[30] = {'\000'}; //临时的char型数组，用于逐位记录数据
+    char sx_name[30] = {'\000'};
     int index = 0;
 
     binaryio.read(tempchar, 1);
-    while (!binaryio.eof()) { //找到名字匹配的表
+    while (!binaryio.eof()) {    //找到名字匹配的表
 
-        if (*tempchar == '\0') { //说明下一个数据是表名或者为结束
+        if (*tempchar == '~') { //说明下一个数据是表名或者为结束
             binaryio.read(tempchar, 1);
             if (binaryio.eof()) {
                 break;
@@ -1046,26 +1093,25 @@ void DBMS::Equi_Join(char* tableName1, char* tableName2, char* Col1, char* Col2)
 
 
             if (tname == table1) { //如果该表正是要查找的表，读其属性
-                //binaryio.read(tempchar,1);
-                // binaryio.read(tempchar,1);
                 int duquindex = 1;
-                while (*tempchar != '\0') { //一直执行到遇到下一个‘\0'即到下一个表或者是结束
+                binaryio.read(tempchar, 1);
+                while (*tempchar != '~' && !binaryio.eof()) { //一直执行到遇到下一个‘\0'即到下一个表或者是结束
                     index = 0;
 
-                    // while (tempchar!='\0'){
-                    binaryio.read(tempchar, 1);
+                    if (binaryio.eof())
+                        break;
+
                     while (*tempchar != ' ') { //读取属性名
-                        tmpchars[index] = *tempchar;
+                        sx_name[index] = *tempchar;
                         index++;
                         binaryio.read(tempchar, 1);
                     }
-                    tmpchars[index] = '\0';
-                    nowsxname = tmpchars;
-
+                    sx_name[index] = '\0';
+                    nowsxname = sx_name;
 
                     binaryio.read(tempchar, 1); //读数据类型
                     index = 0;
-                    while (*tempchar != ' ' && *tempchar != '\0') {
+                    while (*tempchar != ' ' && !binaryio.eof()) {
                         tmpchars[index] = *tempchar;
                         index++;
                         binaryio.read(tempchar, 1);
@@ -1076,55 +1122,66 @@ void DBMS::Equi_Join(char* tableName1, char* tableName2, char* Col1, char* Col2)
                     int value;
 
                     if (datatype == "char") { //如果是char型，接下来读取包含字符的个数-value
-                        cout << "zai char li" << endl;
-                        //binaryio.read(tempchar,1);
+                
                         binaryio.read((char *) (&value), sizeof (value));
-                        datatypes = value;
+                        datasize = value;
+                        tempsxname[tempnum] = sx_name;
+                        tempgs[tempnum++] = datasize;
                         binaryio.read(tempchar, 1);
 
                     }
 
                     if (datatype == "int") { //int型
-                        cout << "zai int li" << endl;
+                        
                         value = 4;
-                        datatypes = 0;
-
-                        //    binaryio.read(tempchar,1);
+                        datasize = 0;
+                        tempsxname[tempnum] = sx_name;
+                        tempgs[tempnum++] = datasize;
+                     
                     }
+
                     duquindex += value;
                     duqu1[t1sx_hao] = duquindex;
-                    sumdatatype1[t1sx_hao] = datatypes;
+                    sumdatatype1[t1sx_hao] = datasize;
+
+                    binaryio.read(tempchar, 1);
+
+                    if (*tempchar == '*' || *tempchar == '#') {
+                        binaryio.read(tempchar, 1);
+                        binaryio.read(tempchar, 1);
+                    }
 
                     if (sx1 == nowsxname) { //找到用于连接的属性
                         sx1index = t1sx_hao;
                         judge1 = true;
-                        datatype1 = datatypes;
+                        datatype1 = datasize;
                     }
                     t1sx_hao++;
-                    //binaryio.read(tempchar,1);
+                    
                 }
             }
-            else if (tname == table2) { //如果该表正是要查找的表，读其属性
-                //binaryio.read(tempchar,1);
-                // binaryio.read(tempchar,1);
-                int duquindex = 1;
-                while (*tempchar != '\0') { //一直执行到遇到下一个‘\0'即到下一个表或者是结束
-                    index = 0;
 
-                    // while (tempchar!='\0'){
-                    binaryio.read(tempchar, 1);
+
+            else if (tname == table2) { //如果该表正是要查找的表，读其属性    
+                int duquindex = 1;
+                binaryio.read(tempchar, 1);
+                while (*tempchar != '~' && !binaryio.eof()) { //一直执行到遇到下一个‘\0'即到下一个表或者是结束
+                   
+
+                    if (binaryio.eof())
+                        break;
+                      index = 0;
                     while (*tempchar != ' ') { //读取属性名
-                        tmpchars[index] = *tempchar;
+                        sx_name[index] = *tempchar;
                         index++;
                         binaryio.read(tempchar, 1);
                     }
-                    tmpchars[index] = '\0';
-                    nowsxname = tmpchars;
-
+                    sx_name[index] = '\0';
+                    nowsxname = sx_name;
 
                     binaryio.read(tempchar, 1); //读数据类型
                     index = 0;
-                    while (*tempchar != ' ' && *tempchar != '\0') {
+                    while (*tempchar != ' ' && !binaryio.eof()) {
                         tmpchars[index] = *tempchar;
                         index++;
                         binaryio.read(tempchar, 1);
@@ -1135,209 +1192,242 @@ void DBMS::Equi_Join(char* tableName1, char* tableName2, char* Col1, char* Col2)
                     int value;
 
                     if (datatype == "char") { //如果是char型，接下来读取包含字符的个数-value
-                        cout << "zai char li" << endl;
-                        //binaryio.read(tempchar,1);
+                   
                         binaryio.read((char *) (&value), sizeof (value));
-                        datatypes = value;
-
+                        datasize = value;
                         binaryio.read(tempchar, 1);
                     }
 
                     if (datatype == "int") { //int型
-                        cout << "zai int li" << endl;
                         value = 4;
-
-                        datatypes = 0;
-                        //    binaryio.read(tempchar,1);
+                        datasize = 0;
                     }
+
                     duquindex += value;
                     duqu2[t2sx_hao] = duquindex;
-                    sumdatatype2[t2sx_hao] = datatypes;
+                    sumdatatype2[t2sx_hao] = datasize;
+
+                    binaryio.read(tempchar, 1);
+
+                    if (*tempchar == '*' || *tempchar == '#') {
+                        binaryio.read(tempchar, 1);
+                        binaryio.read(tempchar, 1);
+                    }
 
                     if (sx2 == nowsxname) { //找到用于连接的属性
                         sx2index = t2sx_hao;
-                        datatype2 = datatypes;
+                        datatype2 = datasize;
                         judge2 = true;
+                    } else {
+                        tempsxname[tempnum] = sx_name;
+                        tempgs[tempnum++] = datasize;
                     }
                     t2sx_hao++;
-                    //binaryio.read(tempchar,1);
+                    
                 }
             }
         } else {
             binaryio.read(tempchar, 1);
         }
     }
-    // cout<<"axyz"<<endl;
-
+    
     if (!judge1 || !judge2) {
         cout << "无法找到所要查找的属性" << endl;
-    } else if (datatype1 != datatype2) {
+    }
+    else if (datatype1 != datatype2) {
         cout << "属性类型不匹配" << endl;
-    } else {
+    }
+    else {
         int tmpint1, tmpint2;
         char* tmpchars1, tmpchars2;
-        int table1num = 0; //table元组个数
-        int table2num = 0;
+
+        char *judge = new char; //用于判断元组是否被删除
 
         t1sx_hao--;
         t2sx_hao--;
 
-        int tolast1 = duqu1[t1sx_hao] - duqu1[sx1index];
-        int tolast2 = duqu2[t2sx_hao] - duqu2[sx2index];
-        int tofirst1 = duqu1[sx1index - 1];
-        int tofirst2 = duqu2[sx2index - 1];
-
-
-        char s0[100];
-        char s1[100];
-        char s2[100];
         table1.append(".tab");
         table2.append(".tab");
         char *t1place = (char *) table1.c_str();
+
+        int tolast1 = duqu1[t1sx_hao] - duqu1[sx1index]; //
+        int tolast2 = duqu2[t2sx_hao] - duqu2[sx2index];
+        int tofirst1 = duqu1[sx1index - 1] - 1;
+        int tofirst2 = duqu2[sx2index - 1] - 1;
+        int jump1 = duqu1[t1sx_hao] - 1;
+        int jump2 = duqu2[t2sx_hao] - 1;
         char *t2place = (char *) table2.c_str();
 
-        char linshi[100]; //用于char*跟string的转换
+        char *yuanzu = new char;
+        char tempchars1[100], tempchars2[100]; //用于char*跟string的转换
+        int value1, value2;
 
-        fstream t1, t2;
+        string t1_string, t2_string;
+
+        fstream t1, temp;
 
         if (datatype1 == 0) { //如果连接类型是整型
-            int t1_int[200] = {0}; //把table1里用于连接的属性都记录下来
-            int t2_int[200] = {0};
-
-
+         
             t1.open(t1place, ios::in | ios::binary);
-            while (!t1.eof()) {
-                t1.seekg(tofirst1, ios::cur);
-                t1.read(reinterpret_cast<char *> (&t1_int[table1num]), sizeof (int));
-                t1.seekg(tolast1, ios::cur);
-                table1num++;
-
-            }
-            t1.close();
-            table1num--;
-
-
-
-            t2.open(t2place, ios::in | ios::binary);
-            while (!t2.eof()) {
-                t2.seekg(tofirst2, ios::cur);
-                t2.read(reinterpret_cast<char *> (&t2_int[table2num]), sizeof (int));
-                t2.seekg(tolast2, ios::cur);
-                table2num++;
-            }
-            t2.close();
-            table2num--;
-
-
-            fstream temp, t1, t2;
             temp.open("temp.tab", ios::out | ios::binary);
-            t1.open(t1place, ios::in | ios::binary);
-            //t2.open(t2place,ios::in|ios::binary);
-            for (int i = 0; i < table1num; i++) {
-                t1.read(s0, duqu1[t1sx_hao] * sizeof (char)); //把table1的元组逐次读出
-                s0[duqu1[t1sx_hao]] = '\0';
-
-                t2.open(t2place, ios::in | ios::binary);
-                for (int t = 0; t < table2num; t++) {
 
 
-                    t2.read(s1, tofirst2 * sizeof (char));
-                    s1[tofirst2] = '\0';
-                    t2.seekg(4L, ios::cur);
-                    t2.read(s2, tolast2 * sizeof (char));
-                    s2[tofirst2] = '\0';
-                    if (t1_int[i] == t2_int[t]) { //如果连接的属性值相等，把t1的元组写入temp
-                        temp.write(s0, duqu1[t1sx_hao] * sizeof (char));
-                        //t2.read(s,tofirst2*sizeof(char));
-                        //s[tofirst2]='\0';
-                        temp.write(s1, tofirst2 * sizeof (char));
-                        //t2.seekg(4L,ios::cur);
-                        //t2.read(s,tolast2*sizeof(char));
-                        // s[tofirst2]='\0';
-                        temp.write(s2, tolast2 * sizeof (char));
-                    }
+            t1.read(judge, 1);      //读取标志位
+            while (!t1.eof()) {
+                
+                if (judge[0] == 'N') { //标志删除则跳过该元组
+                    t1.seekg(jump1, ios::cur);
+                    continue;
                 }
-                t2.close();
+                else { //未删除则读取该属性值
+                    t1.seekg(tofirst1, ios::cur);
+                    t1.read(reinterpret_cast<char *> (&value1), sizeof (int));
+                    t1.seekg(tolast1, ios::cur);
+
+                    fstream t2;
+                    t2.open(t2place, ios::in | ios::binary);
+                    t2.seekg(0L, ios::beg);
+                    t2.read(judge, 1);
+                    while (!t2.eof()) {
+
+                        //  t2.read(judge,1);           //读取标志位
+                        if (judge[0] == 'N') { //标志删除则跳过该元组
+                            t2.seekg(jump2, ios::cur);
+                            continue;
+                        }
+                        else { //未删除则读取该属性值
+                            t2.seekg(tofirst2, ios::cur);
+                            t2.read(reinterpret_cast<char *> (&value2), sizeof (int));
+                            t2.seekg(tolast2, ios::cur);
+                        }
+
+                        if (value1 == value2) { //如果整型连接属性相等
+                            t1.seekg(-jump1, ios::cur);
+                            t1.read(yuanzu, jump1);
+                            temp.write(yuanzu, jump1);
+
+                            t2.seekg(-jump2, ios::cur);
+                            t2.read(yuanzu, tofirst2);
+                            temp.write(yuanzu, tofirst2);
+                            t2.seekg(4, ios::cur);
+                            t2.read(yuanzu, tolast2);
+                            temp.write(yuanzu, tolast2);
+                        }
+                        t2.read(judge, 1);
+                    }
+                    t1.read(judge, 1); //读取标志位
+                    t2.close();
+                }
+              
             }
-            temp.close();
             t1.close();
+            temp.close();
         }
         else {
-            //如果连接类型是char型
-            string t1_strings[200] = {""}; //把table1里用于连接的属性都记录下来
-            string t2_strings[200] = {""};
 
 
             t1.open(t1place, ios::in | ios::binary);
-
-            while (!t1.eof()) {
-                t1.seekg(tofirst1, ios::cur);
-                t1.read(linshi, datatype1);
-                linshi[datatype1] = '\0';
-                t1_strings[table1num] = linshi;
-                t1.seekg(tolast1, ios::cur);
-                table1num++;
-
-            }
-            t1.close();
-            table1num--;
-
-
-
-            t2.open(t2place, ios::in | ios::binary);
-            while (!t2.eof()) {
-                t2.seekg(tofirst2, ios::cur);
-                t2.read(linshi, datatype1);
-                linshi[datatype1] = '\0';
-                t2_strings[table2num] = linshi;
-                t2.seekg(tolast2, ios::cur);
-                table2num++;
-            }
-            t2.close();
-            table2num--;
-
-
-
-
-
-            fstream temp, t1, t2;
             temp.open("temp.tab", ios::out | ios::binary);
-            t1.open(t1place, ios::in | ios::binary);
-            //t2.open(t2place,ios::in|ios::binary);
-            for (int i = 0; i < table1num; i++) {
-                t1.read(s0, duqu1[t1sx_hao] * sizeof (char)); //把table1的元组逐次读出
-                s0[duqu1[t1sx_hao]] = '\0';
+            temp.seekg(0, ios::beg);
+        
+            t1.read(judge, 1); //读取标志位
+            while (!t1.eof()) {
+                if (judge[0] == 'N') { //标志删除则跳过该元组
+                    t1.seekg(jump1, ios::cur);
+                    continue;
+                } else { //未删除则读取该属性值
+                    t1.seekg(tofirst1, ios::cur);
+                    t1.read(tempchars1, datatype1);
+                    tempchars1[datatype1] = '\0';
+                    t1.seekg(tolast1, ios::cur);
+                    t1_string = tempchars1;
 
 
-                t2.open(t2place, ios::in | ios::binary);
-                for (int t = 0; t < table2num; t++) {
+
+                    fstream t2;
+                    t2.open(t2place, ios::in | ios::binary);
+                    t2.seekg(0L, ios::beg);
+                    t2.read(judge, 1); //读取标志位
+
+                    while (!t2.eof()) {
+
+                        if (judge[0] == 'N') { //标志删除则跳过该元组
+                            t2.seekg(jump2, ios::cur);
+                            continue;
+                        }
+                        else if (judge[0] == 'Y') { //未删除则读取该属性值
+                            t2.seekg(tofirst2, ios::cur);
+                            t2.read(tempchars2, datatype1);
+                            tempchars2[datatype1] = '\0';
+                            t2.seekg(tolast2, ios::cur);
+                            t2_string = tempchars2;
+                        }
+
+                        if (t1_string == t2_string) { //如果cahr型连接属性相等
+                            t1.seekg(-jump1, ios::cur);
+                            t1.read(yuanzu, jump1);
+                            temp.write(yuanzu, jump1);
+
+                            t2.seekg(-jump2, ios::cur);
+                            t2.read(yuanzu, tofirst2);
+                            temp.write(yuanzu, tofirst2);
+                            t2.seekg(datatype1, ios::cur);
+                            t2.read(yuanzu, tolast2);
+                            temp.write(yuanzu, tolast2);
+                        }
 
 
-                    t2.read(s1, tofirst2 * sizeof (char));
-                    s1[tofirst2] = '\0';
-                    t2.seekg(datatype1, ios::cur);
-                    t2.read(s2, tolast2 * sizeof (char));
-                    s2[tofirst2] = '\0';
-                    if (t1_strings[i] == t2_strings[t]) { //如果连接的属性值相等，把t1的元组写入temp
-                        temp.write(s0, duqu1[t1sx_hao] * sizeof (char));
-                        //t2.read(s,tofirst2*sizeof(char));
-                        // s[tofirst2]='\0';
-                        temp.write(s1, tofirst2 * sizeof (char));
-                        //t2.seekg(4L,ios::cur);
-                        //t2.read(s,tolast2*sizeof(char));
-                        // s[tofirst2]='\0';
-                        temp.write(s2, tolast2 * sizeof (char));
+                        t2.read(judge, 1); //读取标志位
                     }
+                    t1.read(judge, 1); //读取标志位
+                    t2.close();
                 }
-                t2.close();
             }
-            temp.close();
             t1.close();
+            temp.close();
 
 
 
         }
 
-    }
+        delete judge;
+        delete yuanzu;
+        delete t1place;
+        delete t2place;
 
+        fstream addtemp;
+        addtemp.open("tempgs.tab", ios::in | ios::out | ios::binary);
+        char *tmps = new char;
+
+        char s[10] = {'~', 'T', 'E', 'M', 'P', ' '};
+        addtemp.write(s, 6);
+        for (int t = 0; t < tempnum; t++) {
+
+            tmps = (char *) tempsxname[t].c_str();
+           
+            addtemp.write(tmps, tempsxname[t].length());
+
+            if (tempgs[t] == 0) { //是int型
+                tmps = " int # ";
+                addtemp.write(tmps, 7);
+
+            }
+
+            else {
+                tmps = " char ";
+                addtemp.write(tmps, 6);
+                int value = tempgs[t];
+                addtemp.write(reinterpret_cast<char *> (&value), sizeof (value));
+                tmps = " # ";
+                addtemp.write(tmps, 3);
+            }
+        }
+        delete tmps;
+    }
+    delete tempchar;
+}
+
+void DBMS::Display()
+{
+    
 }
